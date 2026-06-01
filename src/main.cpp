@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <chrono>
 
 #include "PrefixSum1D.h"
 #include "PrefixSum2D.h"
@@ -12,6 +13,10 @@
 #include "SegmentTree.h"
 #include "FenwickTree.h"
 #include "SparseTable.h"
+#include "HybridRMQ.h"
+
+using Clock = std::chrono::high_resolution_clock;
+using Ms    = std::chrono::duration<double, std::milli>;
 
 // ---- helpers ----
 
@@ -297,6 +302,88 @@ void bench_SparseTable() {
     }
 }
 
+void bench_HybridRMQ() {
+    std::cout << "\n=== RMQ via Hybrid (Sqrt + Sparse Table) | Build: O(n) | Query: O(1) ===\n";
+    printHeader();
+
+    std::vector<int> sizes = {100, 500, 1000, 5000, 10000, 50000, 100000};
+    std::mt19937 rng(7);
+
+    for (int n : sizes) {
+        auto arr = randomVector(n);
+        HybridRMQ rmq;
+        size_t buildOps = rmq.build(arr);
+
+        std::uniform_int_distribution<int> dist(0, n - 1);
+        double totalOps = 0;
+        const int Q = 1000;
+        for (int q = 0; q < Q; ++q) {
+            int l = dist(rng), r = dist(rng);
+            if (l > r) std::swap(l, r);
+            size_t ops = 0;
+            rmq.query(l, r, ops);
+            totalOps += ops;
+        }
+        std::cout << std::setw(8)  << n
+                  << std::setw(16) << buildOps
+                  << std::setw(18) << std::fixed << std::setprecision(2)
+                  << totalOps / Q << "\n";
+    }
+}
+
+// ---- Wall-clock timing comparison (compiled with -O3) ----
+void bench_timing() {
+    std::cout << "\n=== Wall-clock build time (ms), " << 100000 << " queries ===\n";
+    std::cout << std::setw(10) << "n"
+              << std::setw(22) << "SparseTable build"
+              << std::setw(20) << "HybridRMQ build"
+              << std::setw(22) << "SparseTable query"
+              << std::setw(20) << "HybridRMQ query" << "\n";
+
+    std::vector<int> sizes = {1000, 10000, 100000, 500000, 1000000};
+    std::mt19937 rng(7);
+    const int Q = 100000;
+
+    for (int n : sizes) {
+        auto arr = randomVector(n);
+        std::uniform_int_distribution<int> dist(0, n - 1);
+
+        SparseTable st;
+        auto t0 = Clock::now();
+        st.build(arr);
+        double stBuild = Ms(Clock::now() - t0).count();
+
+        auto t1 = Clock::now();
+        for (int q = 0; q < Q; ++q) {
+            int l = dist(rng), r = dist(rng);
+            if (l > r) std::swap(l, r);
+            size_t ops = 0;
+            st.query(l, r, ops);
+        }
+        double stQuery = Ms(Clock::now() - t1).count();
+
+        HybridRMQ hr;
+        auto t2 = Clock::now();
+        hr.build(arr);
+        double hrBuild = Ms(Clock::now() - t2).count();
+
+        auto t3 = Clock::now();
+        for (int q = 0; q < Q; ++q) {
+            int l = dist(rng), r = dist(rng);
+            if (l > r) std::swap(l, r);
+            size_t ops = 0;
+            hr.query(l, r, ops);
+        }
+        double hrQuery = Ms(Clock::now() - t3).count();
+
+        std::cout << std::setw(10) << n
+                  << std::setw(22) << std::fixed << std::setprecision(3) << stBuild
+                  << std::setw(20) << hrBuild
+                  << std::setw(22) << stQuery
+                  << std::setw(20) << hrQuery << "\n";
+    }
+}
+
 int main() {
     bench_PrefixSum1D();
     bench_PrefixSum2D();
@@ -305,5 +392,7 @@ int main() {
     bench_SegmentTree();
     bench_FenwickTree();
     bench_SparseTable();
+    bench_HybridRMQ();
+    bench_timing();
     return 0;
 }
